@@ -2,4 +2,8 @@ numpy
 pandas
 boto3
 python-dotenv
+pillow
+imagehash
+tensorflow-macos
+tensorflow-metal
 -e .
