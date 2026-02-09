@@ -65,4 +65,4 @@ def find_exact_duplicates(image_file_paths: list[str]) -> list[str]:
 
     return duplicate_images
 
-# TODO add checking if images are valid for not - currently in Colab notebook
+# TODO add checking if images are valid for not - currently in Colab notebook. Use newer library?
