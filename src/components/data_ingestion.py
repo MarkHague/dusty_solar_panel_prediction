@@ -55,3 +55,5 @@ class DataIngestion:
 
         except Exception as e:
             raise CustomException(e, sys)
+
+# TODO add testing of this component

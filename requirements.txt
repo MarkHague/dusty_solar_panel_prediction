@@ -6,4 +6,5 @@ pillow
 imagehash
 tensorflow-macos
 tensorflow-metal
+pytest
 -e .
