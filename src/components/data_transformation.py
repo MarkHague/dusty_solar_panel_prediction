@@ -15,7 +15,7 @@ class DataTransform:
     def __init__(self):
         self.data_transform_config = DataTransformConfig()
 
-    def create_data_augmentation_layers(self):
+    def create_data_augmentation_layers(self) -> tf.keras.Sequential:
         """
         Create data augmentation layers with random flip, rotation and zoom.
         """

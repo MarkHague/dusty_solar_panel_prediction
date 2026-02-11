@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 @dataclass
 class DataIngestionConfig:
-    raw_data_path: str="../../../solar_dust_detection/Detect_solar_dust_new_data"
     validation_split: float=VALIDATION_SPLIT
     batch_size: int=BATCH_SIZE
     image_height: int=IMG_HEIGHT
@@ -17,11 +16,14 @@ class DataIngestion:
     def __init__(self):
         self.ingestion_config = DataIngestionConfig()
 
-    def initiate_data_ingestion(self):
+    def get_datasets(self, raw_data_path: str):
+        """
+        Return train, validation and test datasets using keras image_dataset_from_directory method.
+        """
         logging.info("Entered data ingestion method")
         try:
             train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-                directory=self.ingestion_config.raw_data_path,
+                directory=raw_data_path,
                 validation_split=self.ingestion_config.validation_split,
                 subset='training',
                 seed=123,
@@ -30,7 +32,7 @@ class DataIngestion:
             )
 
             validation_ds = tf.keras.preprocessing.image_dataset_from_directory(
-                directory=self.ingestion_config.raw_data_path,
+                directory=raw_data_path,
                 validation_split=self.ingestion_config.validation_split,
                 subset='validation',
                 seed=123,
@@ -55,5 +57,3 @@ class DataIngestion:
 
         except Exception as e:
             raise CustomException(e, sys)
-
-# TODO add testing of this component
