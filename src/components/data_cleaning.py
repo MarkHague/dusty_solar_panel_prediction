@@ -66,6 +66,10 @@ class DataCleaning:
                 else:
                     img_hashes[_hash] = image_fn
 
+            except UnidentifiedImageError:
+                print(f"Cannot open {image_fn}, skipping ...")
+                continue
+
             except Exception as e:
                 raise CustomException(e, sys)
 

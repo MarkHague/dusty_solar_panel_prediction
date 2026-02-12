@@ -1,27 +1,30 @@
 from src.components.data_cleaning import DataCleaning
-import os
 data_cleaning = DataCleaning()
 
-# TODO use fixture to load in test images - see Claude
 
 class TestDataCleaning:
     """Test common data cleaning functions """
 
-    def test_find_exact_duplicates(self) -> None:
+    def test_find_exact_duplicates(self, test_images) -> None:
 
-
-        image_paths = ['image_1.jpg','image_2.jpg','image_3.jpg']
+        image_paths = test_images.glob('image_?.jpg')
         # image_paths = [os.path.join(base_path+"/tests",f) for f in image_paths ]
 
         duplicates = data_cleaning.find_exact_duplicates(image_paths)
 
-        assert duplicates[0] == image_paths[0]
+        assert str(duplicates[0]) == str(test_images / "image_1.jpg")
 
 
-    def test_check_if_images_valid(self) -> None:
-        data_dir = "./"
+    def test_check_if_images_valid(self, test_images) -> None:
 
-        not_valid, not_supported = data_cleaning.check_if_images_valid(data_dir)
+        not_valid, not_supported = data_cleaning.check_if_images_valid(test_images)
 
-        assert not_valid[0] == "./image_corrupted.jpg"
-        assert not_supported[0] == "./image_webp.webp"
+        assert not_valid[0] == str(test_images / "image_corrupted.jpg")
+        assert not_supported[0] == str(test_images / "image_webp.webp")
+
+    def test_correct_file_extensions(self, test_images):
+
+        assert (test_images / "image_incorrect_extension.jpg.webp").exists()
+        data_cleaning.correct_file_extensions(test_images)
+
+        assert (test_images / "image_incorrect_extension.jpg.png").exists()
