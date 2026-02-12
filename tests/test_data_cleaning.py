@@ -2,6 +2,8 @@ from src.components.data_cleaning import DataCleaning
 import os
 data_cleaning = DataCleaning()
 
+# TODO use fixture to load in test images - see Claude
+
 class TestDataCleaning:
     """Test common data cleaning functions """
 

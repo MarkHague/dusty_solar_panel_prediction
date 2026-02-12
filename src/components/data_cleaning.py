@@ -12,7 +12,9 @@ import sys
 
 @dataclass
 class DataCleanConfig:
-    accepted_image_types: tuple[str] = ("BMP", "GIF", "JPEG", "PNG")
+    # these need to be immutable, so tuples are good
+    accepted_image_types: tuple[str] = ('BMP', 'GIF', 'JPEG', 'PNG')
+    image_extensions: set[str] = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp', '.ico', '.mpo')
 
 class DataCleaning:
 
@@ -76,7 +78,7 @@ class DataCleaning:
         extensions = [os.path.splitext(f)[1] for f in file_paths]
         return list(set(extensions))
 
-    def check_if_images_valid(self, data_dir: str = None, recursive_search: bool = False) -> (list[str], list[str]):
+    def check_if_images_valid(self, data_dir: str = None, recursive_search: bool = True) -> (list[str], list[str]):
         """
         Check validity of images in a directory for use in tensorflow.
 
@@ -90,28 +92,27 @@ class DataCleaning:
         """
 
         img_type_accepted_by_tf = list(self.data_clean_config.accepted_image_types)
-        # search_path = os.path.join(data_dir, "*")
-        # image_extensions = self.get_unique_extensions(glob.glob(search_path, recursive=recursive_search) )
-        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp', '.ico'}
 
         not_valid = []
         not_supported =[]
 
-        for filepath in glob.glob(os.path.join(data_dir,"*"), recursive=recursive_search ):
+        path_check = Path(data_dir)
+        glob_method = path_check.rglob if recursive_search else path_check.glob
+
+        for filepath in glob_method("*"):
             try:
-                img = Image.open(filepath)
-                img_type = img.format
-                print(f"FILE: {filepath}")
-                if img_type is None:
-                    print(f"{filepath} is not an image")
-                    not_valid.append(filepath)
-                elif img_type not in img_type_accepted_by_tf:
-                    print(f"{filepath} is a {img_type}, not accepted by TensorFlow")
-                    not_supported.append(filepath)
+                with Image.open(filepath) as img:
+                    img_type = img.format
+                    if img_type is None:
+                        print(f"{filepath} is not an image")
+                        not_valid.append(filepath)
+                    elif img_type not in img_type_accepted_by_tf:
+                        print(f"{filepath} is a {img_type}, not accepted by TensorFlow")
+                        not_supported.append(filepath)
             except (UnidentifiedImageError, FileNotFoundError, OSError):
                 # check if file has an image extension
                 root, ext = os.path.splitext(filepath)
-                if ext.lower() in image_extensions:
+                if ext.lower() in self.data_clean_config.image_extensions:
                     not_valid.append(filepath)
                 else:
                     print(f"Skipping: {filepath}, can't be read by Pillow ")
@@ -120,49 +121,104 @@ class DataCleaning:
 
         return [str(f) for f in not_valid], [str(f) for f in not_supported]
 
-    def convert_webp_to_jpeg(self, file_list: list[str] = None, delete_original: bool = True) -> None:
+    def convert_image_to_jpeg(self, file_list: list[str] = None, delete_original: bool = True) -> None:
         """
         Convert WEBP and MPO files to JPEG so they can be read by tensorflow.
         Original image files are deleted by default.
+
+        Args:
+            file_list: list of file paths.
+            delete_original: If True, delete the original file.
 
         """
         for file in file_list:
             root, ext = os.path.splitext(file)
             with Image.open(file) as img:
-                img_type = img.format
-
-                if img_type == "WEBP" or img_type == "MPO":
-                    if ext.lower() != ".webp":
-                        # rename so we can differentiate between old and new files
-                        os.rename(file, root + ".webp")
-                    try:
-                        img.save(root + ".jpg", "JPEG")
-                        logging.info(f"Converting {file} to JPEG ...")
-                        if delete_original:
-                            os.remove(file)
-                    except Exception as e:
-                        logging.info(f'Unable to convert {file}')
-                        raise CustomException(e, sys)
-                else:
-                    raise ValueError("Only WEBP and MPO files accepted")
+                try:
+                    img.save(root + ".jpg", "JPEG")
+                    logging.info(f"Converting {file} to JPEG ...")
+                    os.remove(file)
+                except Exception as e:
+                    logging.info(f'Unable to convert {file}')
+                    raise CustomException(e, sys)
 
     def remove_files(self, file_list: list[str]) -> None:
         """
-        Delete files in a file list
+        Delete files in a file list.
         """
         for file in file_list:
             os.remove(file)
 
-    def correct_file_extensions(self, data_dir: str) -> None:
+    def correct_file_extensions(self, data_dir: str, recursive_search: bool = True) -> None:
         """
         Correct the file extension if it does not reflect the image type.
+
+        Args:
+            data_dir: Directory to search for incorrect file extensions
+            recursive_search: Search recursively or not from data_dir
+
         """
 
-        files = os.listdir(data_dir)
-        for file in files:
-            with Image.open(file) as img:
-                img_type = img.format
-                root, ext = os.path.splitext(file)
+        path = Path(data_dir)
+        glob_method = path.rglob if recursive_search else path.glob
+        files = glob_method("*")
 
-                if ext.lower() != img_type.lower():
-                    os.rename(file, root + img_type.lower())
+        for file in files:
+            try:
+                with Image.open(file) as img:
+                    img_type = img.format
+                    root, ext = os.path.splitext(file)
+
+                    if ext.lower() != img_type.lower():
+                        ext_str = "."+img_type.lower()
+                        print(f"Renaming {file} to {root + ext_str}")
+                        os.rename(file, root + ext_str)
+            except (UnidentifiedImageError, FileNotFoundError, OSError):
+                print(f"Skipping {file}, not readable by Pillow")
+                continue
+                # TODO add test for this
+
+    def run_cleaning_steps(self, data_source: str = None, recursive_search: bool = True) -> None:
+        """
+        Run the following data cleaning steps on image data, before passing to tensorflow:
+            1. Correct the file extension if it does not reflect the image type.
+            2. Remove exact duplicates (keeping the larger images).
+            3. Remove invalid images (e.g. corrupted).
+            4. Convert unsupported image type to jpeg.
+
+        Args:
+            data_source: Directory where image data is stored
+            recursive_search: Search recursively or not from data_source
+        """
+        # 1. correct file extensions
+        print("Correcting file extensions ...")
+        self.correct_file_extensions(data_source, recursive_search=recursive_search)
+
+        # 2. remove duplicates
+        print("Removing duplicates...")
+        path = Path(data_source)
+        glob_method = path.rglob if recursive_search else path.glob
+
+        file_types = ["*" + file_type for file_type in self.data_clean_config.image_extensions]
+        image_file_names = []
+        for files in file_types:
+            image_file_names.extend(glob_method(files) )
+        image_file_names = [str(f) for f in image_file_names]
+
+        duplicates = self.find_exact_duplicates(image_file_names)
+        self.remove_files(duplicates)
+
+        # 3. remove invalid images
+        print("Removing invalid images...")
+        not_valid, not_supported = self.check_if_images_valid(data_source, recursive_search=recursive_search)
+        self.remove_files(not_valid)
+        # 4. convert not supported to jpeg
+        print("Converting not supported to jpeg...")
+        self.convert_image_to_jpeg(file_list=not_supported)
+
+
+
+if __name__ == "__main__":
+    data_cleaning = DataCleaning()
+    data_dir = "../../../solar_dust_detection/Detect_solar_dust_original"
+    data_cleaning.run_cleaning_steps(data_source=data_dir)
