@@ -175,16 +175,15 @@ class DataCleaning:
             try:
                 with Image.open(file) as img:
                     img_type = img.format
+                    img_ext = "." + img_type.lower()
                     root, ext = os.path.splitext(file)
 
-                    if ext.lower() != img_type.lower():
-                        ext_str = "."+img_type.lower()
-                        logging.info(f"Renaming {file} to {root + ext_str}")
-                        os.rename(file, root + ext_str)
+                    if ext.lower() != img_ext:
+                        logging.info(f"Renaming {file} to {root + img_ext}")
+                        os.rename(file, root + img_ext)
             except (UnidentifiedImageError, FileNotFoundError, OSError):
                 logging.info(f"Skipping {file}, not readable by Pillow")
                 continue
-                # TODO add test for this
 
     def run_cleaning_steps(self, data_source: str = None, recursive_search: bool = True) -> None:
         """
