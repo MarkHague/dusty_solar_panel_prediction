@@ -8,7 +8,6 @@ class TestDataCleaning:
     def test_find_exact_duplicates(self, test_images) -> None:
 
         image_paths = test_images.glob('image_?.jpg')
-        # image_paths = [os.path.join(base_path+"/tests",f) for f in image_paths ]
 
         duplicates = data_cleaning.find_exact_duplicates(image_paths)
 
@@ -28,3 +27,14 @@ class TestDataCleaning:
         data_cleaning.correct_file_extensions(test_images)
 
         assert (test_images / "image_incorrect_extension.jpg.png").exists()
+
+    def test_convert_image_to_jpeg(self, test_images):
+
+        image_paths = test_images.glob('image_*')
+        data_cleaning.convert_image_to_jpeg(image_paths)
+
+        assert (test_images / "image_incorrect_extension.jpg.jpg").exists()
+        assert (test_images / "image_webp.jpg").exists()
+        assert not (test_images / "image_webp.webp").exists()
+        assert not (test_images / "image_incorrect_extension.jpg.webp").exists()
+

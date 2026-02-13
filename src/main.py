@@ -7,6 +7,8 @@ import tensorflow as tf
 from src.components.data_cleaning import DataCleaning
 import glob
 
+from tests.test_data_cleaning import data_cleaning
+
 
 def train_model(learning_rate = LEARNING_RATE, epochs = 10,
                 data_source = '../../solar_dust_detection/Detect_solar_dust_new_data'):
@@ -14,6 +16,9 @@ def train_model(learning_rate = LEARNING_RATE, epochs = 10,
     Train the model to predict dusty/dirty and clean solar panels.
 
     """
+    # Data cleaning
+    data_cleaning = DataCleaning()
+    data_cleaning.run_cleaning_steps(data_source=data_source)
 
     # Data Ingestion
     data_ingestion = DataIngestion()

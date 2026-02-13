@@ -125,7 +125,7 @@ class DataCleaning:
 
         return [str(f) for f in not_valid], [str(f) for f in not_supported]
 
-    def convert_image_to_jpeg(self, file_list: list[str] = None, delete_original: bool = True) -> None:
+    def convert_image_to_jpeg(self, file_list: list[str] = None) -> None:
         """
         Convert WEBP and MPO files to JPEG so they can be read by tensorflow.
         Original image files are deleted by default.
@@ -141,7 +141,11 @@ class DataCleaning:
                 try:
                     img.save(root + ".jpg", "JPEG")
                     logging.info(f"Converting {file} to JPEG ...")
-                    os.remove(file)
+                    if ext != ".jpg":
+                        os.remove(file)
+                except UnidentifiedImageError:
+                    print(f"Skipping: {file}, can't be read by Pillow ")
+                    continue
                 except Exception as e:
                     logging.info(f'Unable to convert {file}')
                     raise CustomException(e, sys)
