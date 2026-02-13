@@ -20,6 +20,7 @@ class DataIngestion:
         """
         Return train, validation and test datasets using keras image_dataset_from_directory method.
         """
+        logging.info("\n")
         logging.info("Entered data ingestion method")
         try:
             train_ds = tf.keras.preprocessing.image_dataset_from_directory(

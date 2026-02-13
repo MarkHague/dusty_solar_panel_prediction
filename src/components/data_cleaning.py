@@ -47,7 +47,7 @@ class DataCleaning:
                     base_path, file_name = os.path.split(image_fn)
                     base_path, ori_file_name = os.path.split(img_hashes[_hash])
 
-                    print('{} duplicate of {}'.format(file_name, ori_file_name))
+                    # print('{} duplicate of {}'.format(file_name, ori_file_name))
 
                     image_ori = Image.open(img_hashes[_hash])
                     image_ori_size = image_ori.size[0] * image_ori.size[1]
@@ -56,10 +56,10 @@ class DataCleaning:
                     # keep image with larger size, save duplicate file names
                     if image_ori_size >= image_size:
                         duplicate_images.append(image_fn)
-                        print(f'Image {file_name} is a duplicate')
+                        logging.info(f'Image {file_name} is a duplicate')
                     else:
                         duplicate_images.append(img_hashes[_hash])
-                        print(f'Image {ori_file_name} is a duplicate')
+                        logging.info(f'Image {ori_file_name} is a duplicate')
                         # update file name of new largest image
                         img_hashes[_hash] = image_fn
 
@@ -108,10 +108,10 @@ class DataCleaning:
                 with Image.open(filepath) as img:
                     img_type = img.format
                     if img_type is None:
-                        print(f"{filepath} is not an image")
+                        logging.info(f"{filepath} is not an image")
                         not_valid.append(filepath)
                     elif img_type not in img_type_accepted_by_tf:
-                        print(f"{filepath} is a {img_type}, not accepted by TensorFlow")
+                        logging.info(f"{filepath} is a {img_type}, not accepted by TensorFlow")
                         not_supported.append(filepath)
             except (UnidentifiedImageError, FileNotFoundError, OSError):
                 # check if file has an image extension
@@ -119,7 +119,7 @@ class DataCleaning:
                 if ext.lower() in self.data_clean_config.image_extensions:
                     not_valid.append(filepath)
                 else:
-                    print(f"Skipping: {filepath}, can't be read by Pillow ")
+                    logging.info(f"Skipping: {filepath}, can't be read by Pillow ")
                 continue
 
 
@@ -144,7 +144,7 @@ class DataCleaning:
                     if ext != ".jpg":
                         os.remove(file)
                 except UnidentifiedImageError:
-                    print(f"Skipping: {file}, can't be read by Pillow ")
+                    logging.info(f"Skipping: {file}, can't be read by Pillow ")
                     continue
                 except Exception as e:
                     logging.info(f'Unable to convert {file}')
@@ -179,10 +179,10 @@ class DataCleaning:
 
                     if ext.lower() != img_type.lower():
                         ext_str = "."+img_type.lower()
-                        print(f"Renaming {file} to {root + ext_str}")
+                        logging.info(f"Renaming {file} to {root + ext_str}")
                         os.rename(file, root + ext_str)
             except (UnidentifiedImageError, FileNotFoundError, OSError):
-                print(f"Skipping {file}, not readable by Pillow")
+                logging.info(f"Skipping {file}, not readable by Pillow")
                 continue
                 # TODO add test for this
 
@@ -198,12 +198,15 @@ class DataCleaning:
             data_source: Directory where image data is stored
             recursive_search: Search recursively or not from data_source
         """
+        logging.info("\n")
+        logging.info("RUNNING DATA CLEANING ...")
         # 1. correct file extensions
-        print("Correcting file extensions ...")
+        logging.info("Correcting file extensions ...")
         self.correct_file_extensions(data_source, recursive_search=recursive_search)
 
         # 2. remove duplicates
-        print("Removing duplicates...")
+        logging.info("\n\n")
+        logging.info("Removing duplicates...")
         path = Path(data_source)
         glob_method = path.rglob if recursive_search else path.glob
 
@@ -217,11 +220,13 @@ class DataCleaning:
         self.remove_files(duplicates)
 
         # 3. remove invalid images
-        print("Removing invalid images...")
+        logging.info("\n\n")
+        logging.info("Removing invalid images...")
         not_valid, not_supported = self.check_if_images_valid(data_source, recursive_search=recursive_search)
         self.remove_files(not_valid)
         # 4. convert not supported to jpeg
-        print("Converting not supported to jpeg...")
+        logging.info("\n\n")
+        logging.info("Converting not supported to jpeg...")
         self.convert_image_to_jpeg(file_list=not_supported)
 
 
