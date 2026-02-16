@@ -6,7 +6,7 @@ import tensorflow as tf
 
 @dataclass
 class ModelTrainerConfig:
-    trained_model_file_path=os.path.join("artifacts","model.pkl")
+    trained_model_base_dir: str ="../artifacts/training"
 
 class ModelTrainer:
     def __init__(self):
@@ -63,5 +63,25 @@ class ModelTrainer:
             print(model.summary() )
 
         return model
+
+    def get_keras_cp_callback(self, model_name: str = "model") -> tf.keras.callbacks.ModelCheckpoint:
+        """
+        Creates a keras checkpoint callback to save model weights.
+
+        Args:
+            model_name: Name under which to save the model.
+            base_save_dir: File path to where model is saved.
+                           Combined with model_name to get unique dir for each model.
+        """
+        # create save dir
+        save_dir = os.path.join(self.model_trainer_config.trained_model_base_dir, model_name)
+        os.makedirs(save_dir, exist_ok=True)
+        filepath = os.path.join(save_dir, model_name + ".weights.h5")
+
+        # Create a callback that saves the model's weights
+        cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=filepath,
+                                                         save_weights_only=True,
+                                                         verbose=1)
+        return cp_callback
 
 

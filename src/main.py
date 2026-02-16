@@ -1,4 +1,5 @@
 import logging
+import os.path
 
 from src.components.data_ingestion import DataIngestion
 from src.components.data_transformation import DataTransform
@@ -9,11 +10,27 @@ import tensorflow as tf
 from src.components.data_cleaning import DataCleaning
 
 
-def train_model(learning_rate = LEARNING_RATE, epochs = 10,
-                data_source = '../../solar_dust_detection/Detect_solar_dust_new_data'):
-    """
-    Train the model to predict dusty/dirty and clean solar panels.
+def train_model(learning_rate : int = LEARNING_RATE, epochs : int = 10,
+                data_source : str = '../../solar_dust_detection/Detect_solar_dust_new_data',
+                model_name : str = "model", **early_stopping_kwargs: any):
 
+    # TODO add to docstring the steps taken in this function
+    """
+    Train the model to predict dusty/dirty and clean solar panels, using the following steps:
+        1. Data cleaning (removing duplicates, image files not accepted by tensorflow etc.)
+        2. Generate train, validation and test sets
+        3. Add data augmentation layers and prefetch datasets
+        4. Build the tf.keras.Model
+        5. Compile and train the model with early stopping
+        6. Save the model checkpoints using a callback
+
+    Args:
+        learning_rate: Learning rate for the Adam optimizer
+        epochs: Number of training epochs
+        data_source: Path to the data source directory
+        model_name: Name for the saved model checkpoint
+        **early_stopping_kwargs: Keyword arguments to pass to tf.keras.callbacks.EarlyStopping
+            (e.g., monitor='val_loss', patience=3, min_delta=0.001)
     """
     logging.info("\n\n")
     logging.info("TRAINING MODEL..")
@@ -46,11 +63,35 @@ def train_model(learning_rate = LEARNING_RATE, epochs = 10,
                   loss=tf.keras.losses.BinaryCrossentropy(),
                   metrics=[tf.keras.metrics.BinaryAccuracy(threshold=0.5, name='accuracy')])
 
+    cp_callback = model_trainer.get_keras_cp_callback(model_name=model_name)
+
+    # early stopping - use defaults if no kwargs provided
+    early_stopping_params = {
+        'monitor': 'val_loss',
+        'min_delta': 0,
+        'patience': 2,
+        'verbose': 0,
+        'baseline': None,
+        'restore_best_weights': True,
+        'start_from_epoch': 1,
+        **early_stopping_kwargs # Override defaults with any provided kwargs
+    }
+
+    # noinspection PyArgumentList
+    early_stop_callback = tf.keras.callbacks.EarlyStopping(**early_stopping_params)
+
     history = model.fit(train_ds,
                         epochs=epochs,
-                        validation_data=validation_ds)
+                        validation_data=validation_ds,
+                        callbacks=[early_stop_callback])
+
+    model_save_path = os.path.join(model_trainer.model_trainer_config.trained_model_base_dir, model_name+".keras")
+    os.makedirs(model_trainer.model_trainer_config.trained_model_base_dir, exist_ok=True)
+    model.save(model_save_path)
 
     return model, history
 
 if __name__ == "__main__":
-    model, history = train_model(data_source='../../solar_dust_detection/Detect_solar_dust_original')
+    model_out, history_out = train_model(data_source='../../solar_dust_detection/Detect_solar_dust_curated',
+                                 model_name="model_mobnet_curated_data",
+                                         patience = 3, verbose = 1)

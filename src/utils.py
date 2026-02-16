@@ -1,6 +1,7 @@
 import os
 import boto3
 from dotenv import load_dotenv
+import tensorflow as tf
 from PIL import Image
 import imagehash
 from pathlib import Path
@@ -19,4 +20,3 @@ def get_s3_client() -> None:
         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
 
     )
-
