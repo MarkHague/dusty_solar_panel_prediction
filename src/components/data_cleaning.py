@@ -178,7 +178,9 @@ class DataCleaning:
                     img_ext = "." + img_type.lower()
                     root, ext = os.path.splitext(file)
 
-                    if ext.lower() != img_ext:
+                    if ext.lower() == '.jpg' and img_ext == '.jpeg':
+                        pass
+                    elif ext.lower() != img_ext:
                         logging.info(f"Renaming {file} to {root + img_ext}")
                         os.rename(file, root + img_ext)
             except (UnidentifiedImageError, FileNotFoundError, OSError):
