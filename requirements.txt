@@ -7,4 +7,5 @@ imagehash
 tensorflow-macos
 tensorflow-metal
 pytest
+notebook
 -e .
