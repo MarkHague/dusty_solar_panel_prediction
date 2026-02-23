@@ -1,14 +1,16 @@
+import pandas as pd
+
 from src.logger import logging
 import os
 from PIL import Image
 from PIL import UnidentifiedImageError
 import imagehash
 from pathlib import Path
-import glob
 from src.settings import *
 from dataclasses import dataclass
 from src.exception import CustomException
 import sys
+from src.utils import get_model_predictions
 
 @dataclass
 class DataCleanConfig:
@@ -186,6 +188,56 @@ class DataCleaning:
             except (UnidentifiedImageError, FileNotFoundError, OSError):
                 logging.info(f"Skipping {file}, not readable by Pillow")
                 continue
+
+    def relabel_images(self,
+                       model_path: str = None,
+                       image_dataset_path: str = None,
+                       conf_low: float = 0.15,
+                       conf_high: float = 0.95,
+                       dir_class_0: str = None,
+                       dir_class_1: str = None):
+        """
+        Relabel newly extracted images based on a pretrained model. Currently only works for binary labels.
+
+            Args:
+                model_path: File path to the .keras saved model.
+                image_dataset_path: File path to the newly extracted images.
+                conf_high: Confidence threshold above which we will move images to class 1.
+                conf_low: Confidence threshold below which we will move images to class 0.
+                dir_class_0: Directory path containing images currently in class 0 (alphabetically ordered).
+                dir_class_1: Directory path containing images currently in class 1 (alphabetically ordered).
+
+            Notes:
+                Confidence thresholds (conf_high and conf_low) refer to the trained model's confidence of its prediction.
+
+                If the model outputs a probability of 0.98, and conf_high = 0.95, then the image will be relabeled
+                from class 0 to class 1 (assuming its original label was 0). If conf_high = 0.99, the image is not relabeled.
+                Likewise, if the model outputs a probability of 0.1, and conf_low = 0.15, then the image will be relabeled
+                from class 1 to class 0 (assuming its original label was 1). If conf_low = 0.05, the image is not relabeled.
+
+        """
+
+        # get the model predictions
+        df_preds = get_model_predictions(model_path=model_path, image_dataset_path=image_dataset_path)
+
+        for index, row in df_preds.iterrows():
+            file_name = os.path.basename(row["image_filepath"])
+
+            if row["predicted_label"] != row["expected_label"]:
+                model_prob = row["model_prob"]
+                if model_prob < conf_low:
+                    logging.info(f"Moving image {row['image_filepath']}, with probability {model_prob}")
+
+                    os.rename(os.path.join(dir_class_1, file_name), os.path.join(dir_class_0, file_name) )
+                elif model_prob > conf_high:
+                    logging.info(f"Moving image {row['image_filepath']}, with probability {model_prob}")
+
+                    os.rename(os.path.join(dir_class_0, file_name), os.path.join(dir_class_1, file_name))
+                else:
+                    logging.info(f"Mismatched labels, but confidence too low for {row['image_filepath']}")
+            else:
+                pass
+
 
     def run_cleaning_steps(self, data_source: str = None, recursive_search: bool = True) -> None:
         """

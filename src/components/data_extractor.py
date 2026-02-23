@@ -100,17 +100,21 @@ class DataExtractor:
 
         try:
             for img in json_data_res:
-                new_row = {'date_extracted': date_extracted,
-                           'label': label,
-                           'domain': img["domain"],
-                           'image_url': img["high_res_image"],
-                           'image_title': img["title"],
-                           'page_number': page_num,
-                           'query': query
-                           }
+                if "high_res_image" in img:
+                    new_row = {'date_extracted': date_extracted,
+                               'label': label,
+                               'domain': img["domain"],
+                               'image_url': img["high_res_image"],
+                               'image_title': img["title"],
+                               'page_number': page_num,
+                               'query': query
+                               }
 
-                df_out.loc[len(df_out)] = new_row
+                    df_out.loc[len(df_out)] = new_row
+                else:
+                    logging.info(f"Image data does not contain url: {img}")
         except Exception as e:
+            logging.info("ERROR - Unable to convert json to csv")
             raise CustomException(e, sys)
 
 
@@ -158,32 +162,36 @@ class DataExtractor:
                 "Sec-Fetch-Site": "none",
             }
 
-            response = requests.get(row['image_url'], headers=headers, stream=True)
+            try:
+                response = requests.get(row['image_url'], headers=headers, stream=True)
 
-            if response.status_code == 200:
+                if response.status_code == 200:
 
-                try:
-                    img = Image.open(io.BytesIO(response.content))
-                    img_ext = "." + img.format.lower()
+                    try:
+                        img = Image.open(io.BytesIO(response.content))
+                        img_ext = "." + img.format.lower()
 
-                    filepath = os.path.join(self.data_extract_config.DATA_DIR, "images", row['label'],
-                                            row['query'] + "_" + str(index) + img_ext)
-                    # make base save path if not already done
-                    base_path = os.path.join(self.data_extract_config.DATA_DIR, "images", row['label'])
-                    if not os.path.isdir(base_path):
-                        os.makedirs(base_path)
+                        filepath = os.path.join(self.data_extract_config.DATA_DIR, "images", row['label'],
+                                                row['query'] + "_" + str(index) + img_ext)
+                        # make base save path if not already done
+                        base_path = os.path.join(self.data_extract_config.DATA_DIR, "images", row['label'])
+                        if not os.path.isdir(base_path):
+                            os.makedirs(base_path)
 
-                    with open(filepath, 'wb') as file:
-                        file.write(response.content)
-                        logging.info(f"Writing to disk: {file}")
-                except UnidentifiedImageError:
-                    logging.info(f'Invalid image {row["image_url"]}')
-            else:
-                print(f'Image not retrievable with status code: {response.status_code}')
-                error_data = {"image_name": row['query'] + "_" + str(index),
-                              "image_url": row['image_url'],
-                              "response_code": response.status_code}
-                abnormal_response[len(abnormal_response)] = error_data
+                        with open(filepath, 'wb') as file:
+                            file.write(response.content)
+                            logging.info(f"Writing to disk: {file}")
+                    except UnidentifiedImageError:
+                        logging.info(f'Invalid image {row["image_url"]}')
+                else:
+                    print(f'Image not retrievable with status code: {response.status_code}')
+                    error_data = {"image_name": row['query'] + "_" + str(index),
+                                  "image_url": row['image_url'],
+                                  "response_code": response.status_code}
+                    abnormal_response[len(abnormal_response)] = error_data
+
+            except Exception as e: #TODO create specific exceptions
+                logging.info(f" ERROR Request failed with: {e}")
 
         if len(abnormal_response) > 0:
             return abnormal_response
@@ -195,7 +203,7 @@ class DataExtractor:
         dataframe.to_csv(file_path)
 
     def run_extraction(self, queries: dict[list] = None, pages_per_query = 2,
-                       filename_output_csv_data: str = 'data.csv'):
+                       filename_output_csv_data: str = 'data.csv')-> pd.DataFrame | None:
         """
         Run all steps required to extract image data using the Oxylabs API.
 
@@ -222,6 +230,25 @@ class DataExtractor:
 
         return abnormal_responses
 
+if __name__ == "__main__":
+    data_extract = DataExtractor()
+    file_name_out = "image_data_v1_english"
+    queries_eng = dict(
+        dirty=["dusty rooftop solar panels",
+               "dirty solar panels",
+               "soiled solar panel roof top",
+               "dust dirty solar panel", ],
+
+        clean=["new roof top solar installation",
+               "roof top solar panels residential",
+               "close up solar panels",
+               "amateur photo solar panel roof"]
+    )
+
+    abnormal_res = data_extract.run_extraction(queries=queries_eng,
+                                               filename_output_csv_data=file_name_out+".csv")
+    path = data_extract.data_extract_config.DATA_DIR
+    abnormal_res.to_csv(os.path.join(path, 'abnormal_response_'+file_name_out+".csv"))
 
 
 
