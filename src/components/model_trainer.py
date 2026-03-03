@@ -1,8 +1,7 @@
 import os
-import sys
 from dataclasses import dataclass
 from src.settings import *
-import tensorflow as tf
+import keras
 
 @dataclass
 class ModelTrainerConfig:
@@ -12,8 +11,8 @@ class ModelTrainer:
     def __init__(self):
         self.model_trainer_config=ModelTrainerConfig()
 
-    def build_mobilenet_v2_model(self, train_ds = None, data_augmentation: tf.keras.Sequential = None,
-                                 print_summary: bool = False) -> tf.keras.Model:
+    def build_mobilenet_v2_model(self, train_ds = None, data_augmentation: keras.Sequential = None,
+                                 print_summary: bool = False) -> keras.Model:
         """
         Build the Mobilenet v2 architecture for transfer learning.
 
@@ -25,9 +24,9 @@ class ModelTrainer:
             model: The Mobilenet v2 model with
         """
         # layer that will rescale input images to [-1, 1]
-        preprocess_input = tf.keras.applications.mobilenet_v2.preprocess_input
+        preprocess_input = keras.applications.mobilenet_v2.preprocess_input
         # Create the base model from the pre-trained model MobileNet V2
-        base_model = tf.keras.applications.MobileNetV2(input_shape=IMG_SHAPE,
+        base_model = keras.applications.MobileNetV2(input_shape=IMG_SHAPE,
                                                        include_top=False,
                                                        weights='imagenet')
         # take a look at the output shape of the feature batch
@@ -37,17 +36,17 @@ class ModelTrainer:
         base_model.trainable = False
 
         # Add a classification head by averaging over the 8x8 spatial features
-        global_average_layer = tf.keras.layers.GlobalAveragePooling2D()
+        global_average_layer = keras.layers.GlobalAveragePooling2D()
         feature_batch_average = global_average_layer(feature_batch)
 
         # Add a final dense layer to produce a prediction for each image
         # this prediction will be treated as a logit. Positive numbers predict class 1, negative numbers predict class 0.
-        prediction_layer = tf.keras.layers.Dense(1, activation='sigmoid')
+        prediction_layer = keras.layers.Dense(1, activation='sigmoid')
         prediction_batch = prediction_layer(feature_batch_average)
 
         # chain together all the previous steps to create the final model
         # training = False because we have BatchNorm layers
-        inputs = tf.keras.Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3))
+        inputs = keras.Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3))
         if data_augmentation is not None:
             x = data_augmentation(inputs)
         else:
@@ -55,16 +54,16 @@ class ModelTrainer:
         x = preprocess_input(x)
         x = base_model(x, training=False)
         x = global_average_layer(x)
-        x = tf.keras.layers.Dropout(0.2)(x)
+        x = keras.layers.Dropout(0.2)(x)
         outputs = prediction_layer(x)
-        model = tf.keras.Model(inputs, outputs)
+        model = keras.Model(inputs, outputs)
 
         if print_summary:
             print(model.summary() )
 
         return model
 
-    def get_keras_cp_callback(self, model_name: str = "model") -> tf.keras.callbacks.ModelCheckpoint:
+    def get_keras_cp_callback(self, model_name: str = "model") -> keras.callbacks.ModelCheckpoint:
         """
         Creates a keras checkpoint callback to save model weights.
 
@@ -79,7 +78,7 @@ class ModelTrainer:
         filepath = os.path.join(save_dir, model_name + ".weights.h5")
 
         # Create a callback that saves the model's weights
-        cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=filepath,
+        cp_callback = keras.callbacks.ModelCheckpoint(filepath=filepath,
                                                          save_weights_only=True,
                                                          verbose=1)
         return cp_callback

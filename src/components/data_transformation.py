@@ -1,6 +1,7 @@
 from src.exception import CustomException
 from src.logger import logging
 import tensorflow as tf
+import keras
 from src.settings import *
 from dataclasses import dataclass
 import sys
@@ -15,15 +16,15 @@ class DataTransform:
     def __init__(self):
         self.data_transform_config = DataTransformConfig()
 
-    def create_data_augmentation_layers(self) -> tf.keras.Sequential:
+    def create_data_augmentation_layers(self) -> keras.Sequential:
         """
         Create data augmentation layers with random flip, rotation and zoom.
         """
         try:
-            data_augmentation = tf.keras.Sequential([
-                tf.keras.layers.RandomFlip('horizontal'),
-                tf.keras.layers.RandomRotation(self.data_transform_config.rand_rotation),
-                tf.keras.layers.RandomZoom(self.data_transform_config.rand_zoom)
+            data_augmentation = keras.Sequential([
+                keras.layers.RandomFlip('horizontal'),
+                keras.layers.RandomRotation(self.data_transform_config.rand_rotation),
+                keras.layers.RandomZoom(self.data_transform_config.rand_zoom)
             ])
 
             logging.info("Data augmentation layers created.")

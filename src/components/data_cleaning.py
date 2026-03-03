@@ -1,12 +1,10 @@
 import pandas as pd
-
 from src.logger import logging
 import os
 from PIL import Image
 from PIL import UnidentifiedImageError
 import imagehash
 from pathlib import Path
-from src.settings import *
 from dataclasses import dataclass
 from src.exception import CustomException
 import sys
@@ -48,8 +46,6 @@ class DataCleaning:
                 if _hash in img_hashes:
                     base_path, file_name = os.path.split(image_fn)
                     base_path, ori_file_name = os.path.split(img_hashes[_hash])
-
-                    # print('{} duplicate of {}'.format(file_name, ori_file_name))
 
                     image_ori = Image.open(img_hashes[_hash])
                     image_ori_size = image_ori.size[0] * image_ori.size[1]
@@ -134,13 +130,14 @@ class DataCleaning:
 
         Args:
             file_list: list of file paths.
-            delete_original: If True, delete the original file.
 
         """
         for file in file_list:
             root, ext = os.path.splitext(file)
             with Image.open(file) as img:
                 try:
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
                     img.save(root + ".jpg", "JPEG")
                     logging.info(f"Converting {file} to JPEG ...")
                     if ext != ".jpg":
@@ -151,6 +148,35 @@ class DataCleaning:
                 except Exception as e:
                     logging.info(f'Unable to convert {file}')
                     raise CustomException(e, sys)
+
+    def convert_to_rgb(self, file_list: str = None) -> None:
+        """
+        Convert and save images to RGB.
+
+        Args:
+            file_list: list of file paths.
+        """
+        for file in file_list:
+
+            try:
+                with Image.open(file) as img:
+
+                    if img.mode != "RGB":
+                        img.convert("RGB")
+                        img.save(file)
+                        logging.info(f"Converting {file} to RGB ...")
+
+            except UnidentifiedImageError:
+                logging.info(f"Skipping: {file}, can't be read by Pillow ")
+                continue
+            except OSError as e:
+                logging.info(f"Unable to convert {file}, with exception {e}, removing ...")
+                os.remove(file)
+            except Exception as e:
+                logging.info(f'Unable to convert {file}')
+                raise CustomException(e, sys)
+
+
 
     def remove_files(self, file_list: list[str]) -> None:
         """
@@ -192,20 +218,19 @@ class DataCleaning:
     def relabel_images(self,
                        model_path: str = None,
                        image_dataset_path: str = None,
-                       conf_low: float = 0.15,
-                       conf_high: float = 0.95,
-                       dir_class_0: str = None,
-                       dir_class_1: str = None):
+                       conf_low: float = 0.1,
+                       conf_high: float = 0.99,
+                       perform_image_move: bool = False) -> pd.DataFrame:
         """
         Relabel newly extracted images based on a pretrained model. Currently only works for binary labels.
 
             Args:
                 model_path: File path to the .keras saved model.
-                image_dataset_path: File path to the newly extracted images.
+                image_dataset_path: File path to the newly extracted images. Must contain both classes as sub-directories.
                 conf_high: Confidence threshold above which we will move images to class 1.
                 conf_low: Confidence threshold below which we will move images to class 0.
-                dir_class_0: Directory path containing images currently in class 0 (alphabetically ordered).
-                dir_class_1: Directory path containing images currently in class 1 (alphabetically ordered).
+                perform_image_move: If True, move image files to the model predicted class label.
+                                    If False, only updates the labels in the dataframe for review.
 
             Notes:
                 Confidence thresholds (conf_high and conf_low) refer to the trained model's confidence of its prediction.
@@ -219,6 +244,15 @@ class DataCleaning:
 
         # get the model predictions
         df_preds = get_model_predictions(model_path=model_path, image_dataset_path=image_dataset_path)
+        # get the class names
+        names = df_preds["expected_label"].unique()
+        class_0_name, class_1_name = names[0], names[1]
+
+        # create a dataframe to track which images are being relabeled
+        df_relabelled = df_preds.copy()
+        df_relabelled["relabelled_by_model"] = "N"
+        # we update this with the model predictions
+        df_relabelled["true_label"] = df_relabelled["expected_label"]
 
         for index, row in df_preds.iterrows():
             file_name = os.path.basename(row["image_filepath"])
@@ -226,26 +260,43 @@ class DataCleaning:
             if row["predicted_label"] != row["expected_label"]:
                 model_prob = row["model_prob"]
                 if model_prob < conf_low:
-                    logging.info(f"Moving image {row['image_filepath']}, with probability {model_prob}")
+                    logging.info(f"Image {row['image_filepath']} flagged for relabelling with probability {model_prob}")
+                    df_relabelled.loc[index, "relabelled_by_model"] = "Y"
+                    df_relabelled.loc[index, "true_label"] = class_0_name
 
-                    os.rename(os.path.join(dir_class_1, file_name), os.path.join(dir_class_0, file_name) )
+                    if perform_image_move:
+                        os.rename(os.path.join(image_dataset_path, class_1_name, file_name),
+                                  os.path.join(image_dataset_path, class_0_name, file_name) )
+                        df_relabelled.loc[index, "image_filepath"] = os.path.join(image_dataset_path, class_0_name, file_name)
+
                 elif model_prob > conf_high:
-                    logging.info(f"Moving image {row['image_filepath']}, with probability {model_prob}")
+                    logging.info(f"Image {row['image_filepath']} flagged for relabelling with probability {model_prob}")
+                    df_relabelled.loc[index, "relabelled_by_model"] = "Y"
+                    df_relabelled.loc[index, "true_label"] = class_1_name
 
-                    os.rename(os.path.join(dir_class_0, file_name), os.path.join(dir_class_1, file_name))
+                    if perform_image_move:
+                        os.rename(os.path.join(image_dataset_path, class_0_name, file_name),
+                                  os.path.join(image_dataset_path, class_1_name, file_name) )
+                        df_relabelled.loc[index, "image_filepath"] = os.path.join(image_dataset_path, class_1_name,
+                                                                                  file_name)
                 else:
                     logging.info(f"Mismatched labels, but confidence too low for {row['image_filepath']}")
             else:
                 pass
 
+        return df_relabelled
 
-    def run_cleaning_steps(self, data_source: str = None, recursive_search: bool = True) -> None:
+
+    def run_cleaning_steps(self, data_source: str = None,
+                           recursive_search: bool = True,) -> None:
+
         """
         Run the following data cleaning steps on image data, before passing to tensorflow:
             1. Correct the file extension if it does not reflect the image type.
-            2. Remove exact duplicates (keeping the larger images).
+            2. Convert images that are not RGB, to RGB.
             3. Remove invalid images (e.g. corrupted).
             4. Convert unsupported image type to jpeg.
+            5. Remove exact duplicates (keeping the larger images).
 
         Args:
             data_source: Directory where image data is stored
@@ -257,7 +308,22 @@ class DataCleaning:
         logging.info("Correcting file extensions ...")
         self.correct_file_extensions(data_source, recursive_search=recursive_search)
 
-        # 2. remove duplicates
+        # 2. convert images to RGB, if not already
+        path = Path(data_source)
+        all_files = [p for p in path.rglob("*") if p.is_file()]
+        self.convert_to_rgb(file_list=all_files)
+
+        # 3. remove invalid images
+        logging.info("\n\n")
+        logging.info("Removing invalid images...")
+        not_valid, not_supported = self.check_if_images_valid(data_source, recursive_search=recursive_search)
+        self.remove_files(not_valid)
+        # 4. convert not supported to jpeg
+        logging.info("\n\n")
+        logging.info("Converting not supported to jpeg...")
+        self.convert_image_to_jpeg(file_list=not_supported)
+
+        # 5. remove duplicates
         logging.info("\n\n")
         logging.info("Removing duplicates...")
         path = Path(data_source)
@@ -272,19 +338,41 @@ class DataCleaning:
         duplicates = self.find_exact_duplicates(image_file_names)
         self.remove_files(duplicates)
 
-        # 3. remove invalid images
-        logging.info("\n\n")
-        logging.info("Removing invalid images...")
-        not_valid, not_supported = self.check_if_images_valid(data_source, recursive_search=recursive_search)
-        self.remove_files(not_valid)
-        # 4. convert not supported to jpeg
-        logging.info("\n\n")
-        logging.info("Converting not supported to jpeg...")
-        self.convert_image_to_jpeg(file_list=not_supported)
+    def run_cleaning_steps_model_labelling(self, data_source: str = None,
+                                           recursive_search: bool = True,
+                                           model_path: str = None,
+                                           image_dataset_path: str = None,
+                                           **kwargs
+                                           ) -> pd.DataFrame:
+        """
+        Chain together standard cleaning steps with label checking using an already trained model.
 
+        Args:
+            data_source: Directory where image data is stored
+            recursive_search: Search recursively or not from data_source
+            model_path: File path to the .keras saved model.
+            image_dataset_path: File path to the newly extracted images.
+            **kwargs: additional arguments forwarded to relabel_images method
+
+        """
+        # 1. perform standard cleaning
+        self.run_cleaning_steps(data_source=data_source, recursive_search=recursive_search)
+
+        # 2. relabel results using trained model
+        df_relabel = self.relabel_images(model_path=model_path,
+                                         image_dataset_path=image_dataset_path,
+                                         **kwargs)
+        return df_relabel
 
 
 if __name__ == "__main__":
     data_cleaning = DataCleaning()
-    data_dir = "../../../solar_dust_detection/Detect_solar_dust_original"
-    data_cleaning.run_cleaning_steps(data_source=data_dir)
+    data_dir = "../../artifacts/data/images/"
+    trained_model_path = "../../artifacts/training/model_mobnet_curated_data_extended.keras"
+    # data_cleaning.run_cleaning_steps(data_source=data_dir)
+    df_relabel = data_cleaning.run_cleaning_steps_model_labelling(data_source=data_dir,
+                                                     model_path=trained_model_path,
+                                                     image_dataset_path=data_dir,
+                                                     perform_image_move = True
+                                                                     )
+    df_relabel.to_csv("../../artifacts/data/test_relabelling_with_model.csv")

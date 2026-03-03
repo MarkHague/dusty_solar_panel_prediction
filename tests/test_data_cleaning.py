@@ -35,6 +35,7 @@ class TestDataCleaning:
 
         assert (test_images / "image_incorrect_extension.jpg.jpg").exists()
         assert (test_images / "image_webp.jpg").exists()
+        assert (test_images / "image_not_rgb.jpg").exists()
         assert not (test_images / "image_webp.webp").exists()
         assert not (test_images / "image_incorrect_extension.jpg.webp").exists()
 

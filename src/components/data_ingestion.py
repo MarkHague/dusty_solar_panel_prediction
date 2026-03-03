@@ -2,6 +2,7 @@ import sys
 from src.logger import logging
 from src.exception import CustomException
 import tensorflow as tf
+import keras
 from src.settings import *
 from dataclasses import dataclass
 
@@ -23,7 +24,7 @@ class DataIngestion:
         logging.info("\n")
         logging.info("Entered data ingestion method")
         try:
-            train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+            train_ds = keras.preprocessing.image_dataset_from_directory(
                 directory=raw_data_path,
                 validation_split=self.ingestion_config.validation_split,
                 subset='training',
@@ -32,7 +33,7 @@ class DataIngestion:
                 batch_size= self.ingestion_config.batch_size
             )
 
-            validation_ds = tf.keras.preprocessing.image_dataset_from_directory(
+            validation_ds = keras.preprocessing.image_dataset_from_directory(
                 directory=raw_data_path,
                 validation_split=self.ingestion_config.validation_split,
                 subset='validation',

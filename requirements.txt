@@ -1,11 +1,12 @@
-numpy
+tensorflow-macos
+tensorflow-metal
 pandas
 boto3
 python-dotenv
 pillow
 imagehash
-tensorflow-macos
-tensorflow-metal
 pytest
 notebook
+matplotlib
+flask
 -e .
