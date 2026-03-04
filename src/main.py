@@ -6,7 +6,7 @@ from src.components.data_transformation import DataTransform
 from src.components.model_trainer import ModelTrainer
 from src.settings import LEARNING_RATE
 import keras
-import tensorflow as tf
+import json
 
 from src.components.data_cleaning import DataCleaning
 
@@ -43,7 +43,7 @@ def train_model(learning_rate : int = LEARNING_RATE, epochs : int = 10,
     print("Data ingestion")
     data_ingestion = DataIngestion()
     train_ds, validation_ds, test_ds = data_ingestion.get_datasets(raw_data_path=data_source)
-    # get the class names to add to saved model
+    # get the class names -> list
     class_names = train_ds.class_names
 
     # Data Transformation
@@ -57,8 +57,6 @@ def train_model(learning_rate : int = LEARNING_RATE, epochs : int = 10,
     # build and train the model
     model_trainer = ModelTrainer()
     model = model_trainer.build_mobilenet_v2_model(train_ds=train_ds, data_augmentation=data_augmentation)
-    # save class names
-    model.class_names = tf.Variable(class_names, trainable=False, dtype=tf.string)
 
     # Compile the model
     print("Compiling model")
@@ -90,6 +88,9 @@ def train_model(learning_rate : int = LEARNING_RATE, epochs : int = 10,
     os.makedirs(model_trainer.model_trainer_config.trained_model_base_dir, exist_ok=True)
 
     model.save(model_save_path)
+    #save the class names
+    with open( os.path.join(model_save_path,model_name+"_class_names.json") , "w") as file:
+        json.dump(sorted(class_names), file)
 
     return model, history
 

@@ -18,10 +18,10 @@ class ModelTrainer:
 
         Args:
             train_ds: Training dataset
-            data_augmentation:
+            data_augmentation: Pass in data augmentation layers
             print_summary: If True, print the model architecture summary
         Returns:
-            model: The Mobilenet v2 model with
+            model: The MobileNetV2 model with the base model frozen.
         """
         # layer that will rescale input images to [-1, 1]
         preprocess_input = keras.applications.mobilenet_v2.preprocess_input
@@ -40,7 +40,7 @@ class ModelTrainer:
         feature_batch_average = global_average_layer(feature_batch)
 
         # Add a final dense layer to produce a prediction for each image
-        # this prediction will be treated as a logit. Positive numbers predict class 1, negative numbers predict class 0.
+        # this prediction will be treated as a logit.
         prediction_layer = keras.layers.Dense(1, activation='sigmoid')
         prediction_batch = prediction_layer(feature_batch_average)
 
