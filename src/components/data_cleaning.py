@@ -134,20 +134,20 @@ class DataCleaning:
         """
         for file in file_list:
             root, ext = os.path.splitext(file)
-            with Image.open(file) as img:
-                try:
+            try:
+                with Image.open(file) as img:
                     if img.mode != "RGB":
                         img = img.convert("RGB")
                     img.save(root + ".jpg", "JPEG")
                     logging.info(f"Converting {file} to JPEG ...")
                     if ext != ".jpg":
                         os.remove(file)
-                except UnidentifiedImageError:
-                    logging.info(f"Skipping: {file}, can't be read by Pillow ")
-                    continue
-                except Exception as e:
-                    logging.info(f'Unable to convert {file}')
-                    raise CustomException(e, sys)
+            except UnidentifiedImageError:
+                logging.info(f"Skipping: {file}, can't be read by Pillow ")
+                continue
+            except Exception as e:
+                logging.info(f'Unable to convert {file}')
+                raise CustomException(e, sys)
 
     def convert_to_rgb(self, file_list: str = None) -> None:
         """

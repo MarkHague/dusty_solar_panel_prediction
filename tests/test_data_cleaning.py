@@ -19,7 +19,8 @@ class TestDataCleaning:
         not_valid, not_supported = data_cleaning.check_if_images_valid(test_images)
 
         assert not_valid[0] == str(test_images / "image_corrupted.jpg")
-        assert not_supported[0] == str(test_images / "image_webp.webp")
+        assert not_supported[0] == str(test_images / "image_not_rgb.webp")
+        assert not_supported[1] == str(test_images / "image_webp.webp")
 
     def test_correct_file_extensions(self, test_images):
 
