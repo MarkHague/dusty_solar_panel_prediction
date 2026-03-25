@@ -1,0 +1,53 @@
+name: ci-cd-pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push docker image to Dockerhub
+        run: |
+          docker build -t ${{ vars.TAG_NAME }} .
+          
+          docker tag ${{ vars.TAG_NAME }} ${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPO_NAME }}
+          docker push ${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPO_NAME }}
+
+      - name: Deploy api to AWS cluster
+        run: |
+          aws ecs update-service \
+          --cluster ${{ vars.AWS_CLUSTER_NAME }} \
+          --service ${{ vars.AWS_CLUSTER_SERVICE_NAME }} \
+          --force-new-deployment
+          
+          
+        
