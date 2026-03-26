@@ -4,12 +4,12 @@ from src.settings import *
 import keras
 
 @dataclass
-class ModelTrainerConfig:
+class ModelBuilderConfig:
     trained_model_base_dir: str ="../artifacts/training"
 
-class ModelTrainer:
+class ModelBuilder:
     def __init__(self):
-        self.model_trainer_config=ModelTrainerConfig()
+        self.model_trainer_config=ModelBuilderConfig()
 
     def build_mobilenet_v2_model(self, train_ds = None, data_augmentation: keras.Sequential = None,
                                  print_summary: bool = False) -> keras.Model:
