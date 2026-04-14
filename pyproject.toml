@@ -34,6 +34,7 @@ dev = [
     "matplotlib (>=3.10.8,<4.0.0)",
     "notebook (>=7.5.4,<8.0.0)",
     "psutil (>=7.2.2,<8.0.0)",
+    "mlflow (>=3.11.1,<4.0.0)",
 ]
 
 [tool.poetry.requires-plugins]

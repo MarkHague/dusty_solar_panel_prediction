@@ -1,10 +1,12 @@
 import logging
 import os.path
 
+import mlflow
+
 from src.components.data_ingestion import DataIngestion
 from src.components.data_transformation import DataTransform
 from src.components.model_builder import ModelBuilder
-from src.settings import LEARNING_RATE
+from src.settings import LEARNING_RATE, BATCH_SIZE, IMG_HEIGHT, IMG_WIDTH, VALIDATION_SPLIT, RAND_ROTATION, RAND_ZOOM
 import keras
 import json
 
@@ -34,62 +36,89 @@ def train_model(learning_rate: int = LEARNING_RATE, epochs: int = 10,
     """
     logging.info("\n\n")
     logging.info("TRAINING MODEL..")
-    # Data cleaning
-    print("Data cleaning")
-    data_cleaning = DataCleaning()
-    data_cleaning.run_cleaning_steps(data_source=data_source)
 
-    # Data Ingestion
-    print("Data ingestion")
-    data_ingestion = DataIngestion()
-    train_ds, validation_ds, test_ds = data_ingestion.get_datasets(raw_data_path=data_source)
-    # get the class names -> list
-    class_names = train_ds.class_names
+    with mlflow.start_run():
+        # Log hyperparameters
+        mlflow.log_params({
+            "learning_rate": learning_rate,
+            "epochs requested": epochs,
+            "batch_size": BATCH_SIZE,
+            "img_height": IMG_HEIGHT,
+            "img_width": IMG_WIDTH,
+            "validation_split": VALIDATION_SPLIT,
+            "rand_rotation": RAND_ROTATION,
+            "rand_zoom": RAND_ZOOM,
+            "model_name": model_name,
+            "data_source": data_source,
+            **{f"early_stopping_{k}": v for k, v in early_stopping_kwargs.items()},
+        })
 
-    # Data Transformation
-    data_transform = DataTransform()
-    # Get Data Augmentation layers
-    data_augmentation = data_transform.create_data_augmentation_layers()
-    # Configure datasets for performance
-    train_ds, validation_ds, test_ds = data_transform.prefetch_datasets(
-        train_ds=train_ds, validation_ds=validation_ds, test_ds=test_ds)
+        # Data cleaning
+        print("Data cleaning")
+        data_cleaning = DataCleaning()
+        data_cleaning.run_cleaning_steps(data_source=data_source)
 
-    # build and train the model
-    model_trainer = ModelBuilder()
-    model = model_trainer.build_mobilenet_v2_model(train_ds=train_ds, data_augmentation=data_augmentation)
+        # Data Ingestion
+        print("Data ingestion")
+        data_ingestion = DataIngestion()
+        train_ds, validation_ds, test_ds = data_ingestion.get_datasets(raw_data_path=data_source)
+        # get the class names -> list
+        class_names = train_ds.class_names
 
-    # Compile the model
-    print("Compiling model")
-    model.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-                  loss=keras.losses.BinaryCrossentropy(),
-                  metrics=[keras.metrics.BinaryAccuracy(threshold=0.5, name='accuracy')])
+        # Data Transformation
+        data_transform = DataTransform()
+        # Get Data Augmentation layers
+        data_augmentation = data_transform.create_data_augmentation_layers()
+        # Configure datasets for performance
+        train_ds, validation_ds, test_ds = data_transform.prefetch_datasets(
+            train_ds=train_ds, validation_ds=validation_ds, test_ds=test_ds)
 
-    # early stopping - use defaults if no kwargs provided
-    early_stopping_params = {
-        'monitor': 'val_loss',
-        'min_delta': 0,
-        'patience': 2,
-        'verbose': 0,
-        'baseline': None,
-        'restore_best_weights': True,
-        'start_from_epoch': 1,
-        **early_stopping_kwargs  # Override defaults with any provided kwargs
-    }
+        # build and train the model
+        model_trainer = ModelBuilder()
+        model = model_trainer.build_mobilenet_v2_model(train_ds=train_ds, data_augmentation=data_augmentation)
 
-    # noinspection PyArgumentList
-    early_stop_callback = keras.callbacks.EarlyStopping(**early_stopping_params)
+        # Compile the model
+        print("Compiling model")
+        model.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
+                      loss=keras.losses.BinaryCrossentropy(),
+                      metrics=[keras.metrics.BinaryAccuracy(threshold=0.5, name='accuracy')])
 
-    history = model.fit(train_ds,
-                        epochs=epochs,
-                        validation_data=validation_ds,
-                        callbacks=[early_stop_callback])
+        # early stopping - use defaults if no kwargs provided
+        early_stopping_params = {
+            'monitor': 'val_loss',
+            'min_delta': 0,
+            'patience': 2,
+            'verbose': 0,
+            'baseline': None,
+            'restore_best_weights': True,
+            'start_from_epoch': 1,
+            **early_stopping_kwargs  # Override defaults with any provided kwargs
+        }
 
-    model_save_path = os.path.join(model_trainer.model_trainer_config.trained_model_base_dir, model_name + ".keras")
-    os.makedirs(model_trainer.model_trainer_config.trained_model_base_dir, exist_ok=True)
+        # noinspection PyArgumentList
+        early_stop_callback = keras.callbacks.EarlyStopping(**early_stopping_params)
 
-    model.save(model_save_path)
-    # save the class names
-    with open(os.path.join(model_save_path, model_name + "_class_names.json"), "w") as file:
-        json.dump(sorted(class_names), file)
+        history = model.fit(train_ds,
+                            epochs=epochs,
+                            validation_data=validation_ds,
+                            callbacks=[early_stop_callback])
+
+        # Log per-epoch metrics
+        for metric, values in history.history.items():
+            for epoch, value in enumerate(values):
+                mlflow.log_metric(metric, value, step=epoch)
+
+        # Log final summary metrics for easy comparison in the runs table
+        mlflow.log_metrics({
+            "epochs_trained": len(history.history["loss"]),
+        })
+
+        model_save_path = os.path.join(model_trainer.model_trainer_config.trained_model_base_dir, model_name + ".keras")
+        os.makedirs(model_trainer.model_trainer_config.trained_model_base_dir, exist_ok=True)
+
+        model.save(model_save_path)
+        # save the class names
+        with open(os.path.join(model_trainer.model_trainer_config.trained_model_base_dir, model_name + "_class_names.json"), "w") as file:
+            json.dump(sorted(class_names), file)
 
     return model, history
