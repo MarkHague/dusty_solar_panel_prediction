@@ -2,6 +2,7 @@ import logging
 import os.path
 
 import mlflow
+import numpy as np
 
 from src.components.data_ingestion import DataIngestion
 from src.components.data_transformation import DataTransform
@@ -15,7 +16,8 @@ from src.components.data_cleaning import DataCleaning
 
 def train_model(learning_rate: int = LEARNING_RATE, epochs: int = 10,
                 data_source: str = '../../solar_dust_detection/Detect_solar_dust_new_data',
-                model_name: str = "model", **early_stopping_kwargs: any):
+                model_name: str = "model", run_name: str = None,
+                **early_stopping_kwargs: any):
 
     """
     Train the model to predict dusty/dirty and clean solar panels, using the following steps:
@@ -31,13 +33,14 @@ def train_model(learning_rate: int = LEARNING_RATE, epochs: int = 10,
         epochs: Number of training epochs
         data_source: Path to the data source directory
         model_name: Name for the saved model checkpoint
+        run_name: Name of the run for tracking in mlflow
         **early_stopping_kwargs: Keyword arguments to pass to keras.callbacks.EarlyStopping
             (e.g., monitor='val_loss', patience=3, min_delta=0.001)
     """
     logging.info("\n\n")
     logging.info("TRAINING MODEL..")
 
-    with mlflow.start_run():
+    with mlflow.start_run(run_name=run_name):
         # Log hyperparameters
         mlflow.log_params({
             "learning_rate": learning_rate,
@@ -64,6 +67,13 @@ def train_model(learning_rate: int = LEARNING_RATE, epochs: int = 10,
         train_ds, validation_ds, test_ds = data_ingestion.get_datasets(raw_data_path=data_source)
         # get the class names -> list
         class_names = train_ds.class_names
+
+        # Log dataset sizes (approx: len() returns batch count, last batch may be partial)
+        mlflow.log_params({
+            "train_size": len(train_ds) * BATCH_SIZE,
+            "val_size": len(validation_ds) * BATCH_SIZE,
+            "test_size": len(test_ds) * BATCH_SIZE,
+        })
 
         # Data Transformation
         data_transform = DataTransform()
@@ -111,6 +121,8 @@ def train_model(learning_rate: int = LEARNING_RATE, epochs: int = 10,
         # Log final summary metrics for easy comparison in the runs table
         mlflow.log_metrics({
             "epochs_trained": len(history.history["loss"]),
+            "best_val_loss": min(history.history["val_loss"]),
+            "best_val_accuracy": history.history["val_accuracy"][np.argmin(history.history["val_loss"])],
         })
 
         model_save_path = os.path.join(model_trainer.model_trainer_config.trained_model_base_dir, model_name + ".keras")

@@ -10,7 +10,8 @@ default_tracking_uri = "sqlite:///" + str(PROJECT_ROOT / "artifacts" / "mlflow.d
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", default_tracking_uri))
 
 if __name__ == "__main__":
-    mlflow.set_experiment("mobnet_curated_data_only")
-    model_out, history_out = train_model(data_source='../../solar_dust_detection/Detect_solar_dust_curated',
-                                         model_name="model_mobnet_curated_data",
-                                         patience=3, verbose=1)
+    mlflow.set_experiment("mobnet_curated_data_extended_more_epochs")
+    model_out, history_out = train_model(data_source='../../solar_dust_detection/Detect_solar_dust_new_data',
+                                         model_name="model_mobnet_curated_data_extended",
+                                         run_name="image_size_1024",
+                                         patience=8, verbose=1, epochs=25)
