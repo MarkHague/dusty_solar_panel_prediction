@@ -17,6 +17,7 @@ from src.components.data_cleaning import DataCleaning
 def train_model(learning_rate: int = LEARNING_RATE, epochs: int = 10,
                 data_source: str = '../../solar_dust_detection/Detect_solar_dust_new_data',
                 model_name: str = "model", run_name: str = None,
+                base_model_class : keras.Model = keras.applications.MobileNetV2,
                 **early_stopping_kwargs: any):
 
     """
@@ -33,6 +34,7 @@ def train_model(learning_rate: int = LEARNING_RATE, epochs: int = 10,
         epochs: Number of training epochs
         data_source: Path to the data source directory
         model_name: Name for the saved model checkpoint
+        base_model_class: The keras model class. A list of available models can be found at https://keras.io/api/applications/
         run_name: Name of the run for tracking in mlflow
         **early_stopping_kwargs: Keyword arguments to pass to keras.callbacks.EarlyStopping
             (e.g., monitor='val_loss', patience=3, min_delta=0.001)
@@ -85,7 +87,8 @@ def train_model(learning_rate: int = LEARNING_RATE, epochs: int = 10,
 
         # build and train the model
         model_trainer = ModelBuilder()
-        model = model_trainer.build_mobilenet_v2_model(train_ds=train_ds, data_augmentation=data_augmentation)
+        model = model_trainer.build_model(base_model_class= base_model_class,
+                                         data_augmentation=data_augmentation)
 
         # Compile the model
         print("Compiling model")

@@ -13,5 +13,5 @@ if __name__ == "__main__":
     mlflow.set_experiment("mobnet_curated_data_extended_more_epochs")
     model_out, history_out = train_model(data_source='../../solar_dust_detection/Detect_solar_dust_new_data',
                                          model_name="model_mobnet_curated_data_extended",
-                                         run_name="image_size_1024",
+                                         run_name="image_size_512",
                                          patience=8, verbose=1, epochs=25)
